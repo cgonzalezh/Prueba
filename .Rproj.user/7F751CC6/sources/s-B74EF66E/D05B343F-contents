@@ -1,0 +1,265 @@
+#----------------------------------------------------------------------------------------------
+#                     PROGRAMA PARA PREPROCESAR Y VISUALIZAR FICHEROS
+#----------------------------------------------------------------------------------------------
+
+
+#Primero, cargamos la librer?a para poder leer el fichero
+library(readr)
+
+#Debido a que la linea de caracteres de los ficheros no tiene el mismo numero de columnas
+#que las variables posteriormente, se debe indicar el n?mero de columnas del fichero a leer
+
+no_col<-max(count_fields(file.choose(),tokenizer_csv()))
+vector<-c(1:no_col)
+vector<-as.character(vector)
+
+#Despu?s, leemos el fichero, lo que requiere que seleccionemos el archivo por segunda vez. 
+#Al indicar skip = 0 y col_names = F le estamos diciendo a R que no existen los nombres 
+#de las columnas, que lea desde la primera fila como datos
+datos<-read_csv(file.choose(),skip = 0,col_names = vector)
+
+
+#El problema de nuestros ficheros es que tienen caracteres en medio que debemos
+#eliminar. En la columna 3 para todos los ficheros aparecen los c?digos "CR1000",
+#"estacion", "Smp" y "NA". Con los siguientes 4 comandos quitamos todas aquellas
+# filas que en la tercera columna tengan algunos de esos elementos
+
+datosb<-datos[(datos$`3` != "CR1000") ,]
+datosb<-datosb[datosb$`3` != "estacion",]
+datosb<-datosb[datosb$`3` != "Smp",]
+datosb <- datosb[!is.na(datosb$`3`),]
+
+#Ahora bien, como hab?a caracteres en el fichero R ha interpretado todas las variables
+#le?das como variables tipo cadena. Vamos a definir una nueva variable, dataset, donde
+#almacenaremos la informaci?n bien codificada. 
+
+#Por comodidad, vamos a distinguir entre las diversas estaciones. Para ello, debemos
+#extrar el c?digo recogido en la columna 3 de la variable "datosb" pues es ah? donde
+#se indica la estaci?n:
+
+#B1: Badajoz 1 (11 variables num?ricas)
+#B2: Badajoz 2 (11 variables num?ricas)
+#CV: Covatilla (4 variables num?ricas)
+#PL: Plasencia (4 variables num?ricas)
+#OR: Orellana (4 variables num?ricas)
+
+codigo<-(datosb$`3`)[1]
+
+#extraemos las dos primeras letras
+estacion <-substr(codigo,1,2)
+
+#Con una estructura "if" vamos a ir procesando el archivo para cada estaci?n de forma
+#distinta.
+
+if(estacion == "B1"){
+  
+  #Estamos en la estaci?n de Badajoz, n? 1
+  #Vamos a crear la variable "dataset". Guardamos la informaci?n sobre record y estacion
+  
+  dataset<- datosb[,c(2:3)]
+  
+  #Convertimos las variables restantes tipo cadena en num?ricas
+  
+  variables<-datosb[,c(4:11)]
+  dataset<-cbind(dataset,as.numeric(variables$`4`),as.numeric(variables$`5`),as.numeric(variables$`6`),
+                 as.numeric(variables$`7`),as.numeric(variables$`8`),as.numeric(variables$`9`),
+                 as.numeric(variables$`10`),as.numeric(variables$`11`))
+  
+  #Queremos asignarles nombre pero para ello hay que distinguir entre los archivos
+  #con el c?digo B1IUTG (m?s modernos) y aquellos con el c?digo B1IPYH pues las
+  #variables medidas han cambiado con el tiempo. 
+  
+  antiguedad<-substr(codigo,4,6)
+  
+  if(antiguedad == "UTG"){
+    
+    #Seleccionamos los nombres correspondientes
+    
+    names(dataset)[1:10]<-c("record","estacion","BattVolt","UV_100029","UV_100029_Temp",
+                            "CMP22_160472","CMP22_160472_Temp","CMP11_080493",
+                            "UV_070643","UV_070643_Temp")
+  }
+  
+  if(antiguedad == "PYH"){
+    
+    #Asignamos nombre a las variables num?ricas
+    
+    names(dataset)[1:10]<-c("record","estacion","BattVolt","UV_100029","UV_100029_Temp",
+                            "G068948","CG990413","puenteCG1",
+                            "UV_080017","UV_080017_Temp")
+  }
+  
+  # Tras este paso, las variables son numericas y tienen los nombres correctos. Ahora
+  # hay que crear nuevas variables para el a?o, mes, d?a, hora, minuto y segundo. No hay 
+  # que olvidar que habr? que reconvertirlas en variables num?ricas
+  
+  #Extraemos la informaci?n sobre la fecha, la cual est? recogida en la primera columna
+  #de la variable "datosb"
+  
+  Horario <- datosb$`1`
+  
+  filas<-nrow(dataset)
+  
+  #cargamos la funci?n "obtenerFecha" la cual se encarga de extraer el a?o, mes, dia,
+  #hora, minuto y segundos
+  
+  source("obtenerFecha.R")
+  
+  data<-obtenerfecha(filas,Horario)
+  
+  #las a?adimos al conjunto de datos final
+  dataset<-cbind(data,dataset)
+  
+  #Guardamos el fichero obtenido. Que ya estar?a listo para usarse correctamente
+  
+  nombre<-readline("Escriba el nombre deseado y no olvide a?adir el formato: ")
+  write.table(dataset,nombre ,sep = ",",col.names = TRUE,row.names = FALSE)
+  
+} else if (estacion == "B2"){
+  
+  #igual que con la estaci?n B1 tenemos que distinguir entre los ficheros modernos y 
+  #m?s antiguos pues las variables medidas han cambiado
+  antiguedad<-substr(codigo,3,6)
+  
+  dataset<- datosb[,c(2:3)]
+  
+  if(antiguedad == "YHVZ"){
+    
+    #Convertimos las variables a tipo num?rico
+    
+    variables<-datosb[,c(4:12)]
+    dataset<-cbind(dataset,as.numeric(variables$`4`),as.numeric(variables$`5`),
+                   as.numeric(variables$`6`),as.numeric(variables$`7`),
+                   as.numeric(variables$`8`),as.numeric(variables$`9`),
+                   as.numeric(variables$`10`),as.numeric(variables$`11`),
+                   as.numeric(variables$`12`))
+    
+    #cambiamos el nombre de las variables que hemos a?adido
+    names(dataset)[1:11]<-c("record","estacion","BattVolt","CG1_990143","CG1_990143_Temp",
+                            "UV_080017","UV_080017_Temp","CMP22_150342","CMP22_150342_Temp",
+                            "CHP1_080031","CHP1_080031_Temp")
+    
+    
+  }else if(antiguedad == "TZNG"){
+    
+    #para los ficheros mas antiguos hay menos variables
+    variables<-datosb[,c(4:10)]
+    #las convertimos en n?meros y las a?adimos a nuestra variable "dataset"
+    dataset<-cbind(dataset,as.numeric(variables$`4`),as.numeric(variables$`5`),
+                   as.numeric(variables$`6`),as.numeric(variables$`7`),
+                   as.numeric(variables$`8`),as.numeric(variables$`9`),
+                   as.numeric(variables$`10`))
+    
+    #les ponemos el nombre adecuado
+    names(dataset)[1:9]<-c("record","estacion","BattVolt","G027784","CH_080031","puenteCH1",
+                           "G080493","UV_070643","UV_070643_Temp")
+    
+  }
+  
+  #Llamamos a la funci?n "obtenerFecha" para separar la informaci?n y tener a?o,
+  #dia, mes, hora, minuto y segundo separados y como numeros
+  
+  Horario <- datosb$`1`
+  
+  filas<-nrow(dataset)
+  
+  source("obtenerFecha.R")
+  
+  data<-obtenerfecha(filas,Horario)
+  
+  #a?adimos el resultado al fichero final
+  dataset<-cbind(data,dataset)
+  
+  #Tras este pretratamiento podemos almacenar en un nuevo fichero los datos bien 
+  #identificados y organizados
+  nombre<-readline("Escriba el nombre deseado y no olvide a?adir el formato: ")
+  write.table(dataset,nombre ,sep = ",",col.names = TRUE,row.names = FALSE)
+  
+}else if(estacion == "CV"){
+  
+  #Repetimos todo el proceso para la Covatilla
+  dataset<- datosb[,c(2:3)]
+  
+  variables<-datosb[,c(4:7)]
+  
+  dataset<-cbind(dataset,as.numeric(variables$`4`),as.numeric(variables$`5`),
+                 as.numeric(variables$`6`),as.numeric(variables$`7`))
+  
+  names(dataset)[1:6]<-c("record","estacion","BattVolt","UV_060625","UV_060625_Temp",
+                         "glb070456")
+  
+  Horario <- datosb$`1`
+  
+  filas<-nrow(dataset)
+  
+  source("obtenerFecha.R")
+  
+  data<-obtenerfecha(filas,Horario)
+  
+  dataset<-cbind(data,dataset)
+  
+  #Pedimos al usuario que lo guarde con el nombre que ?l quiera
+  nombre<-readline("Escriba el nombre deseado y no olvide a?adir el formato: ")
+  write.table(dataset,nombre ,sep = ",",col.names = TRUE,row.names = FALSE)
+  
+}else if(estacion == "FC"){
+  
+  #Para Fuente de Cantos, el proceso es el mismo pero con menos variables 
+  dataset<- datosb[,c(2:3)]
+  
+  variables<-datosb[,c(4:7)]
+  
+  dataset<-cbind(dataset,as.numeric(variables$`4`),as.numeric(variables$`5`),
+                 as.numeric(variables$`6`),as.numeric(variables$`7`))
+  
+  names(dataset)[1:6]<-c("record","estacion","BattVolt","UV_070638","UV_070638_Temp",
+                         "G060135")
+  
+  Horario <- datosb$`1`
+  
+  filas<-nrow(dataset)
+  
+  source("obtenerFecha.R")
+  
+  data<-obtenerfecha(filas,Horario)
+  
+  dataset<-cbind(data,dataset)
+  
+  nombre<-readline("Escriba el nombre deseado y no olvide a?adir el formato: ")
+  write.table(dataset,nombre ,sep = ",",col.names = TRUE,row.names = FALSE)
+  
+}else if(estacion == "OR"){
+  
+  #Para la estaci?n de Orellana
+  
+  dataset<- datosb[,c(2:3)]
+  
+  variables<-datosb[,c(4:7)]
+  
+  dataset<-cbind(dataset,as.numeric(variables$`4`),as.numeric(variables$`5`),
+                 as.numeric(variables$`6`),as.numeric(variables$`7`))
+  
+  names(dataset)[1:6]<-c("record","estacion","BattVolt","UV_060634","UV_060634_Temp",
+                         "G017606")
+  
+  Horario <- datosb$`1`
+  
+  filas<-nrow(dataset)
+  
+  source("obtenerFecha.R")
+  
+  data<-obtenerfecha(filas,Horario)
+  
+  dataset<-cbind(data,dataset)
+  
+  nombre<-readline("Escriba el nombre deseado y no olvide a?adir el formato: ")
+  write.table(dataset,nombre ,sep = ",",col.names = TRUE,row.names = FALSE)
+}
+
+
+
+
+
+
+
+
